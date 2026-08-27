@@ -26,12 +26,17 @@ type InputHandler = (
     | { action: "handled" }
 >;
 
-void describe("input steering (cooperative scheduler)", () => {
-    void it("aborts the turn, backgrounds the job, and resubmits the message as a followUp", async () => {
+// Fork change: this fork drops the interrupt-on-input default. The input
+// handler is a no-op — it never intercepts, never backgrounds, never aborts.
+// Pi's native steering applies: the message is queued and delivered at the
+// next turn boundary, and the running command is left alone. These tests pin
+// that behavior (upstream's cooperative-steering tests were removed with the
+// feature).
+void describe("input steering (fork: queue, don't abort)", () => {
+    void it("interactive input with a foreground job active is NOT intercepted — returns continue", async () => {
         const reg = new BackgroundRegistry();
         const sent: { customType?: string }[] = [];
         const resubmitted: ResubmittedMessage[] = [];
-        const notifications: string[] = [];
         let pauseReason: string | undefined;
         let abortCalled = false;
         const handler = registerAndGetHandler(reg, sent, resubmitted);
@@ -48,67 +53,17 @@ void describe("input steering (cooperative scheduler)", () => {
                 source: "interactive",
                 streamingBehavior: "steer",
             },
-            makeCtx(notifications, { abort: () => { abortCalled = true; } })
-        );
-
-        assert.equal(result.action, "handled");
-        assert.equal(pauseReason, "manual");
-        assert.equal(abortCalled, true);
-        // Steering suppresses the synthetic "backgrounded, continue working"
-        // notice — the user's own resubmitted message drives the next turn,
-        // so no redundant agent message is sent.
-        assert.equal(sent.length, 0);
-        assert.deepEqual(resubmitted, [
-            { text: "stop and inspect the last failure", deliverAs: "followUp" },
-        ]);
-    });
-
-    void it("second input while still active does not double-background or double-resubmit", async () => {
-        const reg = new BackgroundRegistry();
-        const sent: { customType?: string }[] = [];
-        const resubmitted: ResubmittedMessage[] = [];
-        const notifications: string[] = [];
-        let abortCalls = 0;
-        const handler = registerAndGetHandler(reg, sent, resubmitted);
-        reg.foreground.set("tc-steer2", {
-            requestPause: () => {},
-        });
-
-        const r1 = await handler(
-            { type: "input", text: "first", source: "interactive", streamingBehavior: "steer" },
-            makeCtx(notifications, { abort: () => { abortCalls++; } })
-        );
-        const r2 = await handler(
-            { type: "input", text: "second", source: "interactive", streamingBehavior: "steer" },
-            makeCtx(notifications, { abort: () => { abortCalls++; } })
-        );
-
-        assert.equal(r1.action, "handled");
-        assert.equal(r2.action, "continue");
-        // No synthetic agent messages are sent during steering (only the user's
-        // resubmitted text), and the second input is ignored (no active slot).
-        assert.equal(sent.length, 0);
-        assert.equal(abortCalls, 1);
-        assert.deepEqual(resubmitted, [{ text: "first", deliverAs: "followUp" }]);
-    });
-
-    void it("returns continue when no cooperative foreground task is active", async () => {
-        const reg = new BackgroundRegistry();
-        const sent: { customType?: string }[] = [];
-        const resubmitted: ResubmittedMessage[] = [];
-        const handler = registerAndGetHandler(reg, sent, resubmitted);
-
-        const result = await handler(
-            { type: "input", text: "any steering", source: "interactive", streamingBehavior: "steer" },
-            makeCtx([], { abort: () => {} })
+            makeCtx([], { abort: () => { abortCalled = true; } })
         );
 
         assert.deepEqual(result, { action: "continue" });
-        assert.equal(sent.length, 0);
-        assert.equal(resubmitted.length, 0);
+        assert.equal(pauseReason, undefined, "must not background the foreground job");
+        assert.equal(abortCalled, false, "must not abort the current turn");
+        assert.equal(sent.length, 0, "must not send any agent message");
+        assert.equal(resubmitted.length, 0, "must not resubmit the message");
     });
 
-    void it("ignores extension-sourced input (recursion guard)", async () => {
+    void it("returns continue for extension-sourced input", async () => {
         const reg = new BackgroundRegistry();
         const sent: { customType?: string }[] = [];
         const resubmitted: ResubmittedMessage[] = [];
@@ -119,6 +74,22 @@ void describe("input steering (cooperative scheduler)", () => {
 
         const result = await handler(
             { type: "input", text: "self-resubmit", source: "extension", streamingBehavior: "steer" },
+            makeCtx([], { abort: () => {} })
+        );
+
+        assert.deepEqual(result, { action: "continue" });
+        assert.equal(sent.length, 0);
+        assert.equal(resubmitted.length, 0);
+    });
+
+    void it("returns continue when no foreground task is active", async () => {
+        const reg = new BackgroundRegistry();
+        const sent: { customType?: string }[] = [];
+        const resubmitted: ResubmittedMessage[] = [];
+        const handler = registerAndGetHandler(reg, sent, resubmitted);
+
+        const result = await handler(
+            { type: "input", text: "any steering", source: "interactive", streamingBehavior: "steer" },
             makeCtx([], { abort: () => {} })
         );
 
