@@ -33,6 +33,7 @@ interface MonitorParams {
     description: string;
     persistent?: boolean;
     timeout_ms?: number;
+    triggerTurn?: boolean;
 }
 
 export function registerMonitorTool(pi: ExtensionAPI, reg: BackgroundRegistry): void {
@@ -76,6 +77,12 @@ export function registerMonitorTool(pi: ExtensionAPI, reg: BackgroundRegistry): 
             timeout_ms: Type.Optional(
                 Type.Number({ description: "Kill after this deadline (default 300000, max 3600000). Ignored when persistent." })
             ),
+            triggerTurn: Type.Optional(
+                Type.Boolean({
+                    description:
+                        "If true, each output line triggers a pi agent turn (DELIVER_STEER) instead of being delivered as a passive follow-up that surfaces after the next reply. Default false keeps today's quiet behavior.",
+                })
+            ),
         }),
 
         async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -105,6 +112,7 @@ export function registerMonitorTool(pi: ExtensionAPI, reg: BackgroundRegistry): 
 
             const description = p.description.trim();
             const persistent = p.persistent === true;
+            const triggerTurn = p.triggerTurn === true;
             const timeoutMs = Math.min(
                 p.timeout_ms && p.timeout_ms > 0 ? p.timeout_ms : MONITOR_DEFAULT_TIMEOUT_MS,
                 MONITOR_MAX_TIMEOUT_MS
@@ -144,6 +152,7 @@ export function registerMonitorTool(pi: ExtensionAPI, reg: BackgroundRegistry): 
                 description,
                 persistent,
                 timeoutMs,
+                triggerTurn,
             });
 
             const sourceDesc = hasWs ? `WebSocket ${p.ws!.url}` : "command";

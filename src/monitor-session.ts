@@ -13,6 +13,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { BackgroundRegistry } from "./state.ts";
 import {
     DELIVER_FOLLOWUP,
+    DELIVER_STEER,
     EVENT,
     MONITOR_MAX_LINES_PER_WINDOW,
     MONITOR_RATE_WINDOW_MS,
@@ -39,8 +40,10 @@ export function startMonitorSession(args: {
     description: string;
     persistent: boolean;
     timeoutMs: number;
+    triggerTurn?: boolean;
 }): void {
     const { pi, reg, ctx, job, source, description, persistent, timeoutMs } = args;
+    const triggerTurn = args.triggerTurn === true;
     const { id, logPath } = job;
 
     let terminalEmitted = false;
@@ -48,11 +51,15 @@ export function startMonitorSession(args: {
     let windowStart = Date.now();
     let windowLines = 0;
 
-    // Stream events stay live but passive (delivered as a follow-up, no wake) —
-    // they carry data the agent is actively watching and surface on the agent's
-    // next natural turn without spawning an unsolicited one. The terminal
-    // notice (stream ended / stopped / failed) is its own <task-notification>
-    // (see finishMonitor), sent the moment the source ends.
+    // Stream events stay live but passive by default (delivered as a follow-up,
+    // no wake) — they carry data the agent is actively watching and surface on
+    // the agent's next natural turn without spawning an unsolicited one. When
+    // triggerTurn is set, each line is delivered via DELIVER_STEER so it wakes
+    // the agent and triggers a turn (the monitor becomes the answer). The
+    // terminal notice (stream ended / stopped / failed) is its own
+    // <task-notification> (see finishMonitor), sent the moment the source ends
+    // via DELIVER_STEER — a monitor ending always wakes the agent.
+    const deliver = triggerTurn ? DELIVER_STEER : DELIVER_FOLLOWUP;
     const emitEvent = (lines: string[]): void => {
         if (lines.length === 0) return;
         pi.sendMessage(
@@ -62,7 +69,7 @@ export function startMonitorSession(args: {
                 display: true,
                 details: { jobId: id, description, logPath, terminal: false },
             },
-            DELIVER_FOLLOWUP
+            deliver
         );
     };
 
