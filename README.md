@@ -1,7 +1,11 @@
-# pi-patty-bg-tasks
+# pi-bg-tasks
 
 <p align="center">
   <strong>English</strong> · <a href="README.ko.md">한국어</a> · <a href="README.zh.md">中文</a>
+</p>
+
+<p align="center">
+  <em>Fork of <a href="https://github.com/patty-io/pi-patty-bg-tasks">patty-io/pi-patty-bg-tasks</a> — same background-task toolkit, with the interrupt-on-input default dropped so typing during a running bash command queues a steer instead of aborting it — matching both Pi's native steering and what Claude Code actually does.</em>
 </p>
 
 <p align="center">
@@ -9,7 +13,6 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/pi-patty-bg-tasks"><img alt="npm" src="https://img.shields.io/npm/v/pi-patty-bg-tasks?color=cb3837&label=npm&logo=npm"></a>&nbsp;
   <img alt="Pi v0.37+" src="https://img.shields.io/badge/Pi-v0.37%2B-5b50f0">&nbsp;
   <img alt="dependencies: zero" src="https://img.shields.io/badge/dependencies-zero-3fb950">&nbsp;
   <img alt="tmux: not required" src="https://img.shields.io/badge/tmux-not_required-3fb950">&nbsp;
@@ -21,13 +24,7 @@
 ## Install
 
 ```
-pi install npm:pi-patty-bg-tasks
-```
-
-Or straight from GitHub:
-
-```
-pi install git:github.com/patty-io/pi-patty-bg-tasks
+pi install git:github.com/elecnix/pi-bg-tasks
 ```
 
 Needs Pi v0.37+. That's the only requirement — there are **no external dependencies** and **no tmux**. Background jobs run as plain Node.js child processes with their output piped straight to a file descriptor. Nothing to install, nothing to babysit.
@@ -191,17 +188,47 @@ its own `<task-notification>` exactly once — reading a finished job's output w
 `jobs output`/`attach` marks it read and suppresses the pending ping, and
 completed-but-unread jobs show `, unread` in `jobs list` and the sidebar.
 
-## Cooperative Steering (Claude Code parity)
+## Steering during a running command (fork change)
 
-Type a message while a backgroundable foreground command is running, and the extension steps in **before** Pi queues your text as steering:
+This fork **drops the interrupt-on-input default** from the upstream
+patty-io/pi-patty-bg-tasks extension.
 
-1. The active foreground command slides into the background (output keeps capturing — nothing is lost).
-2. The current agent turn is aborted.
-3. Your message is re-injected as a fresh user turn the instant the agent is idle.
+- **Upstream behavior (not what this fork does):** typing a message while a
+  backgroundable foreground command is running intercepts the input *before* Pi
+  queues it as steering — the command slides into the background, the current
+  agent turn is aborted, and the message is re-injected as a fresh user turn the
+  instant the agent is idle.
+- **This fork:** typing during a running `bash` command does **not** abort it.
+  Pi's **native steering** applies — the message is queued and delivered at the
+  next turn boundary, and the command keeps running. Nothing is lost (output
+  keeps capturing to the job's log).
 
-That's exactly how Claude Code behaves: submitting input during an interruptible tool aborts the tool and starts a new turn, instead of leaving your message stuck in line behind a long-running call. No polling, no waiting your turn.
+The rest of the package is unchanged: auto-background after 120s, Ctrl+Shift+B
+manual background, the `jobs` manager, the `monitor` tool, stall detection, and
+`agent_bg` all work exactly as upstream. Only the input-interception /
+abort-on-input default is removed — `src/input.ts` now declines to intercept and
+always falls through to Pi.
 
-**Scope:** this applies to the `bash` tool this extension owns. Long-running tools the extension doesn't wrap fall back to Pi's native steering (queued, delivered at the next turn boundary).
+**Why:** a long-running command should keep running while a queued steer waits
+its turn, rather than being torn down the moment you start typing.
+
+This fork **adds** Claude Code parity here rather than dropping it. Claude Code
+does not abort on typed input — measured on **Claude Code 2.1.231** (2026-08-13)
+by driving a real interactive session on a pty: while a foreground bash command
+was running, submitting a message left the command completely untouched (no
+signal, ticking at full rate for the whole 48s observation window), the tool call
+stayed open, and the UI showed *"Press up to edit queued messages"*. Claude Code
+queues. Upstream's interrupt-on-input was upstream's own design choice, not
+parity with Claude Code, and the paragraph above used to say otherwise.
+
+Claude Code *does* kill the foreground command on **Esc** (SIGTERM to the process
+group within ~80ms, SIGKILL ~1s later) and *does* background it on **Ctrl+Shift+B**
+or at the auto-background timeout — which this fork already matches. Typing was the
+one stimulus the old description got backwards.
+
+**Scope:** this applies to every input typed while a tool is running. Long-running
+tools the extension doesn't wrap already use Pi's native steering (queued,
+delivered at the next turn boundary).
 
 ## Status Bar
 
