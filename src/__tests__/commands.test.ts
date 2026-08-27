@@ -24,7 +24,10 @@ void describe("commands", () => {
         assert.ok(commands.has("bg"));
         assert.ok(commands.has("bg-list"));
         assert.ok(commands.has("bg-version"));
-        assert.match(notices[0], /^pi-patty-bg-tasks@\d+\.\d+\.\d+ loaded from /);
-        assert.match(notices[0], /pi-patty-bg-tasks$/);
+        // Fork: package renamed to pi-bg-tasks; the path assertion is relaxed
+        // to "an absolute path follows" — the checkout directory name is
+        // environment-dependent (upstream asserted /pi-patty-bg-tasks$/).
+        assert.match(notices[0], /^pi-bg-tasks@\S+ loaded from /);
+        assert.match(notices[0], /loaded from \//);
     });
 });
