@@ -1,35 +1,31 @@
 // src/input.ts
+//
+// pi-bg-tasks fork: the input handler is intentionally a no-op.
+//
+// The upstream patty-io/pi-patty-bg-tasks extension intercepts user input typed
+// while a foreground bash command is running, backgrounds the command, aborts
+// the current turn, and re-injects the message as a fresh turn ("cooperative
+// steering"). This fork drops that default: typing during a running bash
+// command does NOT abort it. Pi's native steering applies instead, which queues
+// the message and delivers it at the next turn boundary. The command keeps
+// running (auto-background after 120s, Ctrl+B, and the rest of the package are
+// unaffected).
+//
+// Upstream described that interception as Claude Code parity. It is not: Claude
+// Code queues typed input and leaves the foreground command running (measured on
+// CC 2.1.231). Esc kills and Ctrl+B/timeout background, which this fork already
+// matches — so declining to intercept here is what gives parity, not what
+// breaks it.
+//
+// The handler is still registered so the rest of the extension wiring is
+// unchanged; it simply declines to intercept and lets Pi proceed.
+
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { BackgroundRegistry } from "./state.ts";
-import type { UiContext } from "./types.ts";
-import { backgroundActiveForeground } from "./lifecycle.ts";
 
-export function registerInputHandlers(pi: ExtensionAPI, reg: BackgroundRegistry): void {
-    pi.on("input", async (event, ctx) => {
-        // Cooperative steering (Claude Code parity): ANY input typed while a
-        // foreground bash command is running backgrounds that command and
-        // re-delivers the input as the next turn — regardless of the message's
-        // steer/followUp streamingBehavior. We only intercept when a foreground
-        // slot is active; everything else falls through to Pi.
-        if (reg.foreground.size === 0) return { action: "continue" };
-        // Don't intercept extension-sourced messages.
-        if (event.source === "extension") return { action: "continue" };
-
-        const text = event.text;
-        const bg = backgroundActiveForeground(reg, ctx as UiContext);
-        if (!bg) return { action: "continue" };
-
-        // Abort the current turn so the bash tool returns the "backgrounded" result.
-        ctx.abort?.();
-
-        // Resubmit the user's message as a follow-up — Pi delivers it
-        // after the current turn settles. No polling needed.
-        try {
-            pi.sendUserMessage(text, { deliverAs: "followUp" });
-        } catch {
-            // Session ended between abort and resubmit — nothing to deliver to.
-        }
-
-        return { action: "handled" };
+export function registerInputHandlers(_pi: ExtensionAPI, _reg: BackgroundRegistry): void {
+    _pi.on("input", async () => {
+        // Fork change: never intercept — fall through to Pi's native steering.
+        return { action: "continue" } as const;
     });
 }
