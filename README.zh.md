@@ -21,7 +21,7 @@
 ## 安装
 
 ```
-pi install git:github.com/elecnix/pi-bg-tasks
+pi install git:github.com/elecnix/pi-patty-bg-tasks
 ```
 
 只需 Pi v0.37+,要求仅此一条 —— **零外部依赖**,也**不用 tmux**。后台作业就是普通的 Node.js 子进程,输出直接写进一个文件描述符。没什么要装的,也没什么要盯着的。

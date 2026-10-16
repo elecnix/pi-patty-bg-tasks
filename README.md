@@ -24,7 +24,7 @@
 ## Install
 
 ```
-pi install git:github.com/elecnix/pi-bg-tasks
+pi install git:github.com/elecnix/pi-patty-bg-tasks
 ```
 
 Needs Pi v0.37+. That's the only requirement — there are **no external dependencies** and **no tmux**. Background jobs run as plain Node.js child processes with their output piped straight to a file descriptor. Nothing to install, nothing to babysit.

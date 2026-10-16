@@ -21,7 +21,7 @@
 ## 설치
 
 ```
-pi install git:github.com/elecnix/pi-bg-tasks
+pi install git:github.com/elecnix/pi-patty-bg-tasks
 ```
 
 필요한 건 Pi v0.37 이상, 그게 전부입니다. **외부 의존성도 없고 tmux도 안 씁니다.** 백그라운드 잡은 그냥 평범한 Node.js 자식 프로세스로 돌아가고, 출력은 곧장 파일 디스크립터로 흘려보냅니다. 따로 설치할 것도, 신경 써서 돌볼 것도 없습니다.
